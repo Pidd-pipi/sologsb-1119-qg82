@@ -29,7 +29,7 @@ export default function ProcedureForm() {
   const specimens = useSpecimenStore((s) => s.items);
   const addProcedure = useProcedureStore((s) => s.add);
   const finish = useProcedureStore((s) => s.finish);
-  const rollback = useProcedureStore((s) => s.rollback);
+  const rework = useProcedureStore((s) => s.rework);
 
   const [specimenId, setSpecimenId] = useState(params.get('specimenId') ?? specimens[0]?.id ?? '');
   const [stepType, setStepType] = useState<StepType>('清修');
@@ -97,6 +97,9 @@ export default function ProcedureForm() {
       operator: operator.trim(),
       startedAt: Date.now(),
       state: 'pending',
+      completions: [],
+      reworks: [],
+      reworkCount: 0,
     });
 
     if (withPhotos && specimen) {
@@ -334,12 +337,16 @@ export default function ProcedureForm() {
           <ProcedureTimeline
             items={progress.list}
             onFinish={async (pid) => {
-              await finish(pid);
-              setToast('节点已完成');
+              try {
+                await finish(pid);
+                setToast('节点已完成');
+              } catch (err) {
+                setToast(err instanceof Error ? err.message : '完成失败');
+              }
             }}
-            onRollback={async (pid) => {
-              await rollback(pid);
-              setToast('节点已回退');
+            onRework={async (pid, reason, owner) => {
+              await rework(pid, reason, owner);
+              setToast('已登记返修：该节点及后续已完成节点回到待办');
             }}
           />
         </Paper>

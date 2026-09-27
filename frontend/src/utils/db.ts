@@ -7,7 +7,7 @@ import { makeSketchDataUrl } from '../types/photo';
 import { newId } from './id';
 
 /** 当前数据结构版本，写入 localStorage 便于回显 */
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 export const DB_NAME = 'gbfossilprep';
 export const LS_VERSION_KEY = 'gbfossilprep:db-version';
 
@@ -52,6 +52,35 @@ class FossilPrepDB extends Dexie {
           .modify((row: any) => {
             if (!row.issues) row.issues = [];
             if (row.lowThreshold === undefined) row.lowThreshold = 1;
+          });
+      });
+    // v3：返修全留痕——完成记录 completions、返修记录 reworks、返修次数 reworkCount；
+    // 旧的 rolledback 节点统一回到待办（其首次完成留痕保留，后续可继续按序号返修/重做）
+    this.version(3)
+      .stores({
+        specimens: 'id, specimenNo, taxon, locality, status, createdAt',
+        procedures: 'id, specimenId, seq, stepType, state, startedAt',
+        supplies: 'id, kind, lotNo, name, openedAt',
+        photos: 'id, specimenId, procedureId, stage, capturedAt',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('procedures')
+          .toCollection()
+          .modify((row: any) => {
+            if (!Array.isArray(row.completions)) {
+              // 旧档案补首次完成留痕：只要曾完成（含后来被回退）就以 finishedAt 合成
+              row.completions =
+                row.state === 'done' || row.state === 'rolledback'
+                  ? [{ at: row.finishedAt ?? row.startedAt ?? Date.now(), operator: row.operator ?? '', round: 1 }]
+                  : [];
+            }
+            if (!Array.isArray(row.reworks)) row.reworks = [];
+            if (typeof row.reworkCount !== 'number') row.reworkCount = 0;
+            if (row.state === 'rolledback') {
+              row.state = 'pending';
+              row.finishedAt = undefined;
+            }
           });
       });
   }
@@ -138,6 +167,9 @@ export async function ensureSeedData(): Promise<void> {
       startedAt: now - 10 * day,
       state: 'done',
       finishedAt: now - 10 * day + 145 * 60000,
+      completions: [{ at: now - 10 * day + 145 * 60000, operator: '林砚秋', round: 1 }],
+      reworks: [],
+      reworkCount: 0,
     },
     {
       id: newId('prc'),
@@ -157,6 +189,9 @@ export async function ensureSeedData(): Promise<void> {
       operator: '林砚秋',
       startedAt: now - 6 * day,
       state: 'pending',
+      completions: [],
+      reworks: [],
+      reworkCount: 0,
     },
   ];
 

@@ -29,7 +29,7 @@ export default function SpecimenDetail() {
   const specimen = useSpecimenStore((s) => s.items.find((it) => it.id === id));
   const setStatus = useSpecimenStore((s) => s.setStatus);
   const finish = useProcedureStore((s) => s.finish);
-  const rollback = useProcedureStore((s) => s.rollback);
+  const rework = useProcedureStore((s) => s.rework);
   const progress = usePrepProgress(id);
   const [photos, setPhotos] = useState<PrepPhoto[]>([]);
   const [toast, setToast] = useState('');
@@ -122,8 +122,16 @@ export default function SpecimenDetail() {
               {progress.current ? `#${progress.current.seq} ${progress.current.stepType} · ${progress.current.nodeName}` : '全部节点已完成'}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              已回退节点 {progress.rolledback} 个 · 完成率 {progress.percent}%
+              累计返修 {progress.reworkCount} 次 · 返修中节点 {progress.reworking} 个 · 完成率 {progress.percent}%
             </Typography>
+            <Chip
+              size="small"
+              sx={{ mt: 1 }}
+              color={progress.deliveryReady ? 'success' : 'default'}
+              variant={progress.deliveryReady ? 'filled' : 'outlined'}
+              label={progress.deliveryReady ? '交付准备就绪：全部节点已完成' : '交付未就绪：尚有节点未完成'}
+              data-testid="delivery-ready"
+            />
           </Paper>
         </Stack>
 
@@ -135,12 +143,16 @@ export default function SpecimenDetail() {
             <ProcedureTimeline
               items={progress.list}
               onFinish={async (pid) => {
-                await finish(pid);
-                setToast('节点已完成');
+                try {
+                  await finish(pid);
+                  setToast('节点已完成');
+                } catch (err) {
+                  setToast(err instanceof Error ? err.message : '完成失败');
+                }
               }}
-              onRollback={async (pid) => {
-                await rollback(pid);
-                setToast('节点已回退');
+              onRework={async (pid, reason, owner) => {
+                await rework(pid, reason, owner);
+                setToast('已登记返修：该节点及后续已完成节点已回到待办');
               }}
             />
           </Paper>
