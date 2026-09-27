@@ -40,8 +40,25 @@ export const STEP_FIELD_MAP: Record<
   },
 };
 
-/** 工序节点状态 */
-export type ProcedureState = 'pending' | 'done' | 'rolledback';
+/** 工序节点状态（返修重开后回到待办，历史留在 events 时间线） */
+export type ProcedureState = 'pending' | 'done';
+
+/** 节点留痕事件类型：完成 / 返修重开 */
+export type ProcedureEventType = 'complete' | 'rework';
+
+/** 节点留痕事件：每次完成与每次返修各记一条，按时间排序 */
+export interface ProcedureEvent {
+  id: string;
+  type: ProcedureEventType;
+  /** 发生时间戳 */
+  at: number;
+  /** 操作人（返修时为返修责任人） */
+  operator: string;
+  /** 返修原因，仅 type = rework 时有值 */
+  reason?: string;
+  /** 该节点的第几次返修，仅 type = rework 时有值 */
+  reworkNo?: number;
+}
 
 /** 修复工序 */
 export interface PrepProcedure {
@@ -72,6 +89,10 @@ export interface PrepProcedure {
   startedAt: number;
   state: ProcedureState;
   finishedAt?: number;
+  /** 该节点累计返修次数 */
+  reworkCount: number;
+  /** 完成 / 返修留痕时间线 */
+  events: ProcedureEvent[];
 }
 
-export type PrepProcedureDraft = Omit<PrepProcedure, 'id'>;
+export type PrepProcedureDraft = Omit<PrepProcedure, 'id' | 'reworkCount' | 'events'>;

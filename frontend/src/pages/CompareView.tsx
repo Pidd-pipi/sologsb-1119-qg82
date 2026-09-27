@@ -75,11 +75,14 @@ export default function CompareView() {
     lines.push(`尺寸/重量：${specimen.dimensions} mm / ${specimen.weight} g`);
     lines.push(`当前状态：${specimen.status}`);
     lines.push(`工序完成度：${progress.done}/${progress.total}（${progress.percent}%）`);
+    lines.push(`累计返修：${progress.reworkCount} 次`);
     lines.push(
       `工序节点：${
         progress.list.length === 0
           ? '无'
-          : progress.list.map((n) => `#${n.seq}${n.stepType}(${n.nodeName}·${n.state === 'done' ? '已完成' : n.state === 'rolledback' ? '已回退' : '待办'})`).join(' → ')
+          : progress.list
+              .map((n) => `#${n.seq}${n.stepType}(${n.nodeName}·${n.state === 'done' ? '已完成' : '待办'}${n.reworkCount > 0 ? `·返修${n.reworkCount}次` : ''})`)
+              .join(' → ')
       }`,
     );
     lines.push(`修复前影像：${before ? `${PHOTO_STAGE_LABEL[before.stage]} · ${before.caption}` : '未选'}`);
@@ -223,9 +226,10 @@ export default function CompareView() {
                     </Typography>
                     <Chip
                       size="small"
-                      label={n.state === 'done' ? '已完成' : n.state === 'rolledback' ? '已回退' : '待办'}
-                      color={n.state === 'done' ? 'success' : n.state === 'rolledback' ? 'error' : 'default'}
+                      label={n.state === 'done' ? '已完成' : n.reworkCount > 0 ? '返修待办' : '待办'}
+                      color={n.state === 'done' ? 'success' : n.reworkCount > 0 ? 'warning' : 'default'}
                     />
+                    {n.reworkCount > 0 ? <Chip size="small" color="warning" variant="outlined" label={`返修 ${n.reworkCount} 次`} /> : null}
                   </Stack>
                 ))}
               </Stack>

@@ -29,7 +29,7 @@ export default function ProcedureForm() {
   const specimens = useSpecimenStore((s) => s.items);
   const addProcedure = useProcedureStore((s) => s.add);
   const finish = useProcedureStore((s) => s.finish);
-  const rollback = useProcedureStore((s) => s.rollback);
+  const rework = useProcedureStore((s) => s.rework);
 
   const [specimenId, setSpecimenId] = useState(params.get('specimenId') ?? specimens[0]?.id ?? '');
   const [stepType, setStepType] = useState<StepType>('清修');
@@ -334,12 +334,20 @@ export default function ProcedureForm() {
           <ProcedureTimeline
             items={progress.list}
             onFinish={async (pid) => {
-              await finish(pid);
-              setToast('节点已完成');
+              try {
+                await finish(pid);
+                setToast('节点已完成');
+              } catch (e) {
+                setToast(e instanceof Error ? e.message : '完成节点失败');
+              }
             }}
-            onRollback={async (pid) => {
-              await rollback(pid);
-              setToast('节点已回退');
+            onRework={async (pid, reason, operator) => {
+              try {
+                const { cascaded } = await rework(pid, { reason, operator });
+                setToast(cascaded > 0 ? `返修已登记，${cascaded} 个后续节点一并回到待办` : '返修已登记，节点已回到待办');
+              } catch (e) {
+                setToast(e instanceof Error ? e.message : '返修登记失败');
+              }
             }}
           />
         </Paper>

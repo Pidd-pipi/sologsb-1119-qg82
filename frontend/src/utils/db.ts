@@ -7,7 +7,7 @@ import { makeSketchDataUrl } from '../types/photo';
 import { newId } from './id';
 
 /** 当前数据结构版本，写入 localStorage 便于回显 */
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 export const DB_NAME = 'gbfossilprep';
 export const LS_VERSION_KEY = 'gbfossilprep:db-version';
 
@@ -52,6 +52,36 @@ class FossilPrepDB extends Dexie {
           .modify((row: any) => {
             if (!row.issues) row.issues = [];
             if (row.lowThreshold === undefined) row.lowThreshold = 1;
+          });
+      });
+    // v3：返修留痕。结构不变，仅补齐 events / reworkCount，旧的 rolledback 状态并入待办
+    this.version(3)
+      .stores({
+        specimens: 'id, specimenNo, taxon, locality, status, createdAt',
+        procedures: 'id, specimenId, seq, stepType, state, startedAt',
+        supplies: 'id, kind, lotNo, name, openedAt',
+        photos: 'id, specimenId, procedureId, stage, capturedAt',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('procedures')
+          .toCollection()
+          .modify((row: any) => {
+            if (row.reworkCount === undefined) row.reworkCount = 0;
+            if (row.events === undefined) {
+              // 老档案没有事件流：已完成节点按 finishedAt 补记一条完成留痕，时间线不断档
+              row.events = [];
+              if (row.state === 'done' && row.finishedAt) {
+                row.events.push({
+                  id: newId('evt'),
+                  type: 'complete',
+                  at: row.finishedAt,
+                  operator: row.operator ?? '',
+                });
+              }
+            }
+            // 旧版「已回退」状态取消，回到待办后可按新流程继续处理
+            if (row.state === 'rolledback') row.state = 'pending';
           });
       });
   }
@@ -138,6 +168,15 @@ export async function ensureSeedData(): Promise<void> {
       startedAt: now - 10 * day,
       state: 'done',
       finishedAt: now - 10 * day + 145 * 60000,
+      reworkCount: 0,
+      events: [
+        {
+          id: newId('evt'),
+          type: 'complete',
+          at: now - 10 * day + 145 * 60000,
+          operator: '林砚秋',
+        },
+      ],
     },
     {
       id: newId('prc'),
@@ -157,6 +196,8 @@ export async function ensureSeedData(): Promise<void> {
       operator: '林砚秋',
       startedAt: now - 6 * day,
       state: 'pending',
+      reworkCount: 0,
+      events: [],
     },
   ];
 

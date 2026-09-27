@@ -29,7 +29,7 @@ export default function SpecimenDetail() {
   const specimen = useSpecimenStore((s) => s.items.find((it) => it.id === id));
   const setStatus = useSpecimenStore((s) => s.setStatus);
   const finish = useProcedureStore((s) => s.finish);
-  const rollback = useProcedureStore((s) => s.rollback);
+  const rework = useProcedureStore((s) => s.rework);
   const progress = usePrepProgress(id);
   const [photos, setPhotos] = useState<PrepPhoto[]>([]);
   const [toast, setToast] = useState('');
@@ -122,7 +122,7 @@ export default function SpecimenDetail() {
               {progress.current ? `#${progress.current.seq} ${progress.current.stepType} · ${progress.current.nodeName}` : '全部节点已完成'}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              已回退节点 {progress.rolledback} 个 · 完成率 {progress.percent}%
+              累计返修 {progress.reworkCount} 次 · 完成率 {progress.percent}%
             </Typography>
           </Paper>
         </Stack>
@@ -135,12 +135,20 @@ export default function SpecimenDetail() {
             <ProcedureTimeline
               items={progress.list}
               onFinish={async (pid) => {
-                await finish(pid);
-                setToast('节点已完成');
+                try {
+                  await finish(pid);
+                  setToast('节点已完成');
+                } catch (e) {
+                  setToast(e instanceof Error ? e.message : '完成节点失败');
+                }
               }}
-              onRollback={async (pid) => {
-                await rollback(pid);
-                setToast('节点已回退');
+              onRework={async (pid, reason, operator) => {
+                try {
+                  const { cascaded } = await rework(pid, { reason, operator });
+                  setToast(cascaded > 0 ? `返修已登记，${cascaded} 个后续节点一并回到待办` : '返修已登记，节点已回到待办');
+                } catch (e) {
+                  setToast(e instanceof Error ? e.message : '返修登记失败');
+                }
               }}
             />
           </Paper>
